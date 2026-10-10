@@ -193,7 +193,7 @@
     {/if}
   </fieldset>
 
-  <p class="note">残り {WARN_MARKS_SEC.join('・')} 秒と時間到達時に音が鳴ります</p>
+  <p class="note">残り 15・10 秒、5 秒前からは 1 秒ごと、時間到達時に音が鳴ります</p>
 </main>
 
 <style>

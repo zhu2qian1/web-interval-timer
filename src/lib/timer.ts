@@ -2,8 +2,8 @@
 
 export type SoundKind = 'warn' | 'end'
 
-/** 予告音を鳴らす残り秒数 */
-export const WARN_MARKS_SEC = [15, 10, 5] as const
+/** 予告音を鳴らす残り秒数。5 秒前からは時報のように 1 秒ごとに鳴らす */
+export const WARN_MARKS_SEC = [15, 10, 5, 4, 3, 2, 1] as const
 
 export interface TimerConfig {
   /** 1 ラップ（インターバル）の長さ */

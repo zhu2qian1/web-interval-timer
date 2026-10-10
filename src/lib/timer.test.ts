@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { lapOffsets, formatTime, soundEventsBetween, timerView, type TimerConfig } from './timer'
+import { lapOffsets, formatTime, soundEventsBetween, timerView, type SoundEvent, type TimerConfig } from './timer'
 
 const MIN = 60_000
 
@@ -61,61 +61,45 @@ describe('timerView', () => {
   })
 })
 
+/** 音の時刻を秒に、終了音を "end" に変換して比較しやすくする */
+const summarize = (events: SoundEvent[]) => events.map((e) => (e.sound === 'end' ? `${e.at / 1000}:end` : e.at / 1000))
+
 describe('lapOffsets', () => {
-  it('15/10/5 秒前と終了時に鳴る', () => {
-    expect(lapOffsets(MIN)).toEqual([
-      { at: 45_000, sound: 'warn' },
-      { at: 50_000, sound: 'warn' },
-      { at: 55_000, sound: 'warn' },
-      { at: 60_000, sound: 'end' },
-    ])
+  it('15/10 秒前、5 秒前からは 1 秒ごと、終了時に鳴る', () => {
+    expect(summarize(lapOffsets(MIN))).toEqual([45, 50, 55, 56, 57, 58, 59, '60:end'])
   })
 
   it('設定時間以上の予告は鳴らさない', () => {
-    expect(lapOffsets(10_000)).toEqual([
-      { at: 5_000, sound: 'warn' },
-      { at: 10_000, sound: 'end' },
-    ])
+    expect(summarize(lapOffsets(10_000))).toEqual([5, 6, 7, 8, 9, '10:end'])
   })
 })
 
 describe('soundEventsBetween', () => {
   it('区間 (from, to] の音だけを返す', () => {
     const cfg: TimerConfig = { durationMs: MIN, repeat: false }
-    expect(soundEventsBetween(cfg, 0, 45_000, 55_000).map((e) => e.at)).toEqual([50_000, 55_000])
+    expect(summarize(soundEventsBetween(cfg, 0, 45_000, 55_000))).toEqual([50, 55])
   })
 
-  it('繰り返しなしでは次のサイクルの音を返さない', () => {
+  it('繰り返しなしでは次のラップの音を返さない', () => {
     const cfg: TimerConfig = { durationMs: MIN, repeat: false }
-    expect(soundEventsBetween(cfg, 0, 0, MIN * 3)).toHaveLength(4)
+    expect(soundEventsBetween(cfg, 0, 0, MIN * 3)).toHaveLength(8)
   })
 
   it('最初のラップだけ長さが違う場合も、以降はインターバルごとに鳴る', () => {
     const cfg: TimerConfig = { durationMs: 20_000, firstLapMs: 12_000, repeat: true }
-    expect(soundEventsBetween(cfg, 0, 0, 32_000)).toEqual([
-      { at: 2_000, sound: 'warn' },
-      { at: 7_000, sound: 'warn' },
-      { at: 12_000, sound: 'end' },
-      { at: 17_000, sound: 'warn' },
-      { at: 22_000, sound: 'warn' },
-      { at: 27_000, sound: 'warn' },
-      { at: 32_000, sound: 'end' },
+    expect(summarize(soundEventsBetween(cfg, 0, 0, 32_000))).toEqual([
+      2, 7, 8, 9, 10, 11, '12:end',
+      17, 22, 27, 28, 29, 30, 31, '32:end',
     ])
     // 途中の区間だけ取り出しても同じ時刻になる
-    expect(soundEventsBetween(cfg, 0, 20_000, 32_000).map((e) => e.at)).toEqual([22_000, 27_000, 32_000])
+    expect(summarize(soundEventsBetween(cfg, 0, 20_000, 32_000))).toEqual([22, 27, 28, 29, 30, 31, '32:end'])
   })
 
   it('繰り返しありでは複数ラップにまたがる', () => {
     const cfg: TimerConfig = { durationMs: 20_000, repeat: true }
-    expect(soundEventsBetween(cfg, 1000, 1000, 41_000)).toEqual([
-      { at: 6_000, sound: 'warn' },
-      { at: 11_000, sound: 'warn' },
-      { at: 16_000, sound: 'warn' },
-      { at: 21_000, sound: 'end' },
-      { at: 26_000, sound: 'warn' },
-      { at: 31_000, sound: 'warn' },
-      { at: 36_000, sound: 'warn' },
-      { at: 41_000, sound: 'end' },
+    expect(summarize(soundEventsBetween(cfg, 1000, 1000, 41_000))).toEqual([
+      6, 11, 16, 17, 18, 19, 20, '21:end',
+      26, 31, 36, 37, 38, 39, 40, '41:end',
     ])
   })
 })
