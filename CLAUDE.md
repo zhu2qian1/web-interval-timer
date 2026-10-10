@@ -30,8 +30,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `scripts/gen-sounds.sh` が ffmpeg で `public/sounds/` に mp3 を生成する（生成物もコミット対象）。
 
-- `warn.mp3`: 残り 15/10/5 秒の予告音（880Hz 短音）
-- `end.mp3`: 時間到達音（1320Hz の 3 連音）
+- `warn.mp3`: 残り 15/10 秒と 5〜1 秒の予告音（440Hz の短音）
+- `end.mp3`: 時間到達音（880Hz・2s。時報のように `curve=par` で減衰させる）
 
 音を変える場合はスクリプトを編集して再生成する。mp3 を手で差し替えない。
 
