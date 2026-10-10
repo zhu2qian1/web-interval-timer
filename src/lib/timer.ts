@@ -6,8 +6,11 @@ export type SoundKind = 'warn' | 'end'
 export const WARN_MARKS_SEC = [15, 10, 5] as const
 
 export interface TimerConfig {
+  /** 1 ラップ（インターバル）の長さ */
   durationMs: number
-  /** 時間到達後に自動で次のサイクルを始めるか */
+  /** 最初のラップだけ長さを変える場合に指定。省略時は durationMs */
+  firstLapMs?: number
+  /** 時間到達後に自動で次のラップを始めるか。false なら最初のラップだけで終了 */
   repeat: boolean
 }
 
@@ -20,8 +23,10 @@ export type TimerState =
 
 export interface TimerView {
   remainingMs: number
-  /** 1 始まりのサイクル番号 */
-  cycle: number
+  /** 現在のラップの長さ */
+  lapMs: number
+  /** 1 始まりのラップ番号 */
+  lap: number
   finished: boolean
 }
 
@@ -41,27 +46,33 @@ export function elapsedMs(state: TimerState, now: number): number {
   }
 }
 
-export function timerView(config: TimerConfig, state: TimerState, now: number): TimerView {
-  const d = config.durationMs
-  if (state.status === 'finished') return { remainingMs: 0, cycle: 1, finished: true }
-  if (state.status === 'idle' || d <= 0) return { remainingMs: d, cycle: 1, finished: false }
-
-  const elapsed = elapsedMs(state, now)
-  if (!config.repeat) {
-    return elapsed >= d
-      ? { remainingMs: 0, cycle: 1, finished: true }
-      : { remainingMs: d - elapsed, cycle: 1, finished: false }
-  }
-  const cycleIndex = Math.floor(elapsed / d)
-  return { remainingMs: d - (elapsed % d), cycle: cycleIndex + 1, finished: false }
+export function firstLapMs(config: TimerConfig): number {
+  return config.firstLapMs ?? config.durationMs
 }
 
-/** 1 サイクル内での音のオフセット（サイクル開始からの ms）。開始直後と同時刻の予告音は除く */
-export function cycleOffsets(durationMs: number): SoundEvent[] {
-  const events: SoundEvent[] = WARN_MARKS_SEC.map((s) => durationMs - s * 1000)
+export function timerView(config: TimerConfig, state: TimerState, now: number): TimerView {
+  const d = config.durationMs
+  const first = firstLapMs(config)
+  if (state.status === 'finished') return { remainingMs: 0, lapMs: first, lap: 1, finished: true }
+  if (state.status === 'idle' || d <= 0 || first <= 0) {
+    return { remainingMs: first, lapMs: first, lap: 1, finished: false }
+  }
+
+  const elapsed = elapsedMs(state, now)
+  if (elapsed < first) return { remainingMs: first - elapsed, lapMs: first, lap: 1, finished: false }
+  if (!config.repeat) return { remainingMs: 0, lapMs: first, lap: 1, finished: true }
+
+  // 2 ラップ目以降は長さ d で繰り返す
+  const after = elapsed - first
+  return { remainingMs: d - (after % d), lapMs: d, lap: Math.floor(after / d) + 2, finished: false }
+}
+
+/** 1 ラップ内での音のオフセット（ラップ開始からの ms）。開始直後と同時刻の予告音は除く */
+export function lapOffsets(lapMs: number): SoundEvent[] {
+  const events: SoundEvent[] = WARN_MARKS_SEC.map((s) => lapMs - s * 1000)
     .filter((offset) => offset > 0)
     .map((offset) => ({ at: offset, sound: 'warn' as const }))
-  events.push({ at: durationMs, sound: 'end' })
+  events.push({ at: lapMs, sound: 'end' })
   return events.sort((a, b) => a.at - b.at)
 }
 
@@ -73,19 +84,26 @@ export function soundEventsBetween(
   to: number,
 ): SoundEvent[] {
   const d = config.durationMs
-  if (d <= 0 || to <= from) return []
-
-  const offsets = cycleOffsets(d)
-  const firstCycle = Math.max(0, Math.floor((from - startedAt) / d))
-  const lastCycle = config.repeat ? Math.floor((to - startedAt) / d) : 0
+  const first = firstLapMs(config)
+  if (d <= 0 || first <= 0 || to <= from) return []
 
   const events: SoundEvent[] = []
-  for (let k = firstCycle; k <= lastCycle; k++) {
+  const push = (lapStart: number, offsets: SoundEvent[]) => {
     for (const o of offsets) {
-      const at = startedAt + k * d + o.at
+      const at = lapStart + o.at
       if (at > from && at <= to) events.push({ at, sound: o.sound })
     }
   }
+
+  push(startedAt, lapOffsets(first))
+  if (!config.repeat) return events
+
+  // 2 ラップ目以降。k はその中での 0 始まりの番号
+  const base = startedAt + first
+  const offsets = lapOffsets(d)
+  const firstK = Math.max(0, Math.floor((from - base) / d))
+  const lastK = Math.floor((to - base) / d)
+  for (let k = firstK; k <= lastK; k++) push(base + k * d, offsets)
   return events
 }
 

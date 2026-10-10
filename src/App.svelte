@@ -3,6 +3,7 @@
   import { SoundPlayer } from './lib/sound'
   import {
     elapsedMs,
+    firstLapMs,
     formatTime,
     soundEventsBetween,
     timerView,
@@ -28,14 +29,22 @@
   const clampInt = (v: unknown, max: number) =>
     typeof v === 'number' && Number.isFinite(v) ? Math.min(max, Math.max(0, Math.floor(v))) : 0
 
-  const durationMs = $derived(
-    (clampInt(settings.minutes, 999) * 60 + clampInt(settings.seconds, 59)) * 1000,
-  )
-  const config = $derived({ durationMs, repeat: settings.repeat })
+  const toMs = (minutes: unknown, seconds: unknown) =>
+    (clampInt(minutes, 999) * 60 + clampInt(seconds, 59)) * 1000
+
+  const durationMs = $derived(toMs(settings.minutes, settings.seconds))
+  // 最初のラップの別設定は繰り返し時のみ意味を持つ
+  const useFirstLap = $derived(settings.repeat && settings.firstLap)
+  const config = $derived({
+    durationMs,
+    firstLapMs: useFirstLap ? toMs(settings.firstMinutes, settings.firstSeconds) : undefined,
+    repeat: settings.repeat,
+  })
+  const canStart = $derived(durationMs > 0 && firstLapMs(config) > 0)
   const view = $derived(timerView(config, timer, now))
   const active = $derived(timer.status === 'running' || timer.status === 'paused')
   const warning = $derived(active && view.remainingMs <= WARN_MARKS_SEC[0] * 1000)
-  const progress = $derived(durationMs > 0 ? 1 - view.remainingMs / durationMs : 0)
+  const progress = $derived(view.lapMs > 0 ? 1 - view.remainingMs / view.lapMs : 0)
 
   $effect(() => saveSettings($state.snapshot(settings)))
 
@@ -74,7 +83,7 @@
   }
 
   async function start() {
-    if (durationMs <= 0 || timer.status === 'running') return
+    if (!canStart || timer.status === 'running') return
     const elapsed = elapsedMs(timer, Date.now())
     try {
       await sound.unlock()
@@ -113,7 +122,7 @@
       {#if view.finished}
         時間です
       {:else if settings.repeat && active}
-        {view.cycle} 回目
+        ラップ {view.lap}
       {:else}
         &nbsp;
       {/if}
@@ -129,24 +138,59 @@
     {:else if timer.status === 'paused'}
       <button class="primary" onclick={start}>再開</button>
     {:else}
-      <button class="primary" onclick={start} disabled={durationMs <= 0}>スタート</button>
+      <button class="primary" onclick={start} disabled={!canStart}>スタート</button>
     {/if}
     <button onclick={reset} disabled={timer.status === 'idle'}>リセット</button>
   </div>
 
   <fieldset class="settings" disabled={active}>
-    <label>
-      <input type="number" inputmode="numeric" min="0" max="999" bind:value={settings.minutes} />
-      分
-    </label>
-    <label>
-      <input type="number" inputmode="numeric" min="0" max="59" bind:value={settings.seconds} />
-      秒
-    </label>
-    <label class="repeat">
-      <input type="checkbox" bind:checked={settings.repeat} />
-      繰り返す
-    </label>
+    <div class="row">
+      <span class="label">インターバル</span>
+      <label>
+        <input type="number" inputmode="numeric" min="0" max="999" bind:value={settings.minutes} />
+        分
+      </label>
+      <label>
+        <input type="number" inputmode="numeric" min="0" max="59" bind:value={settings.seconds} />
+        秒
+      </label>
+    </div>
+    <div class="row">
+      <label>
+        <input type="checkbox" bind:checked={settings.repeat} />
+        繰り返す
+      </label>
+    </div>
+    {#if settings.repeat}
+      <div class="row">
+        <label class="label">
+          <input type="checkbox" bind:checked={settings.firstLap} />
+          最初のラップ
+        </label>
+        <label>
+          <input
+            type="number"
+            inputmode="numeric"
+            min="0"
+            max="999"
+            disabled={!settings.firstLap}
+            bind:value={settings.firstMinutes}
+          />
+          分
+        </label>
+        <label>
+          <input
+            type="number"
+            inputmode="numeric"
+            min="0"
+            max="59"
+            disabled={!settings.firstLap}
+            bind:value={settings.firstSeconds}
+          />
+          秒
+        </label>
+      </div>
+    {/if}
   </fieldset>
 
   <p class="note">残り {WARN_MARKS_SEC.join('・')} 秒と時間到達時に音が鳴ります</p>
@@ -243,13 +287,29 @@
 
   .settings {
     display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
+    flex-direction: column;
     align-items: center;
-    gap: 1rem;
+    gap: 0.75rem;
     border: none;
     margin: 0;
     padding: 0;
+  }
+
+  .row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .label {
+    min-width: 9rem;
+    text-align: right;
+  }
+
+  input:disabled {
+    opacity: 0.5;
   }
 
   .settings:disabled {
