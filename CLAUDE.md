@@ -16,7 +16,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 | 用途 | コマンド |
 | --- | --- |
-| 開発サーバ | `mise run dev` |
+| 開発サーバ | `mise run dev`（ツール・依存の導入込みなら `scripts/dev.sh`、LAN 公開は `scripts/dev.sh --host`） |
 | 本番ビルド（`dist/`） | `mise run build` |
 | ビルドのプレビュー | `mise run preview` |
 | 型チェック（svelte-check + tsc） | `mise run check` |
