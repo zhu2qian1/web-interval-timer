@@ -1,0 +1,31 @@
+[tools]
+node = "24"
+pnpm = "12"
+
+[tasks.install]
+description = "依存パッケージをインストール"
+run = "pnpm install"
+
+[tasks.dev]
+description = "開発サーバを起動"
+run = "pnpm dev"
+
+[tasks.build]
+description = "本番ビルド (dist/)"
+run = "pnpm build"
+
+[tasks.preview]
+description = "ビルド結果をプレビュー"
+run = "pnpm preview"
+
+[tasks.check]
+description = "型チェック (svelte-check + tsc)"
+run = "pnpm check"
+
+[tasks.test]
+description = "ユニットテスト (vitest)"
+run = "pnpm test"
+
+[tasks.sounds]
+description = "ffmpeg でタイマー音を生成 (public/sounds/)"
+run = "bash scripts/gen-sounds.sh"
