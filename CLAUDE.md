@@ -35,8 +35,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 音を変える場合はスクリプトを編集して再生成する。mp3 を手で差し替えない。
 
-## 実装上の注意
+## アーキテクチャ
 
-- 残り時間は `setInterval` のカウント加算ではなく、開始時刻（`performance.now()` / `Date.now()`）との差分から算出する。バックグラウンドタブではタイマーが間引かれるため、加算方式だとずれる。
-- ブラウザの自動再生制限があるため、音声（`HTMLAudioElement` / Web Audio の `AudioContext`）はスタートボタン等のユーザー操作時にアンロックしておく。
-- 時間計算などの純粋ロジックは `src/lib/` の `.ts` に分離し、vitest でテストする（`*.test.ts` を同階層に置く）。
+状態とイベントループは `src/App.svelte` が持ち、副作用のないロジックとブラウザ API のラッパーは `src/lib/` に分けている。
+
+- `timer.ts`: 純粋関数のみ（vitest の対象）。`TimerState` は `idle | running | paused | finished`。`running` の `startedAt` は一時停止分を差し引いた仮想的な開始時刻なので、経過時間は常に `now - startedAt` で求まる。音を鳴らす時刻は `soundEventsBetween()` で、区間 `(from, to]` に入る分だけ列挙する。
+- `sound.ts`: Web Audio で音を**事前予約**する（`AudioBufferSourceNode.start(when)`）。バックグラウンドタブでは JS のタイマーが最大 1 分程度間引かれるが、AudioContext の時計は間引かれないため。`unlock()` は自動再生制限を解除するため、ユーザー操作のハンドラ内で呼ぶ必要がある。
+- `App.svelte`: 200ms ごとの tick で表示を更新し、`scheduledUntil` から `now + 5分` までの音を予約していく。一時停止とリセットでは `cancelAll()` で予約を破棄し、再開時に予約し直す。
+- `settings.ts`（分・秒・繰り返しを localStorage に保存）と `wakeLock.ts`（動作中の画面スリープを防止）。
+
+残り時間は必ず時刻の差分から算出し、tick ごとにカウンタを加算する方式にはしない。時間計算のロジックを追加するときは `timer.ts` に置き、`timer.test.ts` でテストする。
