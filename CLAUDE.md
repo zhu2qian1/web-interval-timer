@@ -26,6 +26,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 リンター/フォーマッターは未導入。変更後は `mise run check` と `mise run test` を通すこと。
 
+## デプロイ
+
+`main` への push で `.github/workflows/deploy.yml` が check・test・build を行い GitHub Pages に公開する。ビルド時の `base` は `actions/configure-pages` の `base_path` から渡す（`*.github.io/web-interval-timer/` 配信なら `/web-interval-timer/`、独自ドメイン設定後は `/`）。そのため、コードから `public/` のファイルを参照するときは URL をルート固定（`/foo`）で書かず、`import.meta.env.BASE_URL` を前置すること。
+
 ## タイマー音
 
 `scripts/gen-sounds.sh` が ffmpeg で `public/sounds/` に mp3 を生成する（生成物もコミット対象）。
